@@ -170,6 +170,25 @@ client.connect((err) => {
             res.send(question);
         });
     });
+    
+    app.get("/answers", verifyJwt, (req, res) => {
+        const id = req.query.question;
+        answersCollection.find({ questionId: id }).toArray((err, answers) => {
+            if(!err){
+                res.send({
+                    success: true,
+                    message: `Found ${answers.length} answers!`,
+                    answers,
+                });
+            } else {
+                res.send({
+                    success: false,
+                    message: "No answer found for this question",
+                });
+            }
+        });
+    });
+
 });
 
 app.get("/", (req, res) => {
