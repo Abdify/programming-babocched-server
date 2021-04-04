@@ -39,6 +39,7 @@ client.connect((err) => {
     const usersCollection = client.db(process.env.DB_NAME).collection("users");
     const questionsCollection = client.db(process.env.DB_NAME).collection("questions");
     const answersCollection = client.db(process.env.DB_NAME).collection("answers");
+    const reactionsCollection = client.db(process.env.DB_NAME).collection("reactions");
 
     app.post("/addUser", (req, res) => {
         const newUser = req.body;
@@ -105,13 +106,24 @@ client.connect((err) => {
 
     app.post("/ask", verifyJwt, (req, res) => {
         usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
-            const question = req.body;
             const { _id, userName, email } = user;
+            const question = req.body;
             question.askedBy = { _id, userName, email };
+            question.thumbsUpCount = 0;
+            question.answerCount = 0;
             console.log(question);
-            questionsCollection.insertOne(question).then((result) => {
-                res.send(result.insertedCount > 0);
-            });
+            questionsCollection
+                .insertOne(question)
+                .then((result) => {
+                    res.send(result.insertedCount > 0);
+                    console.log(result.ops[0]._id);
+                    return result.ops[0]._id;
+                })
+                .then((qId) => {
+                    console.log(qId);
+                    reactionsCollection.insertOne({ questionId: qId, users: [] });
+                    
+                });
         });
     });
 
@@ -126,10 +138,22 @@ client.connect((err) => {
                 answersCollection
                     .insertOne(answer)
                     .then((result) => {
-                        res.send({
-                            success: true,
-                            message: "Successfully added your answer, thank you for contributing😊",
-                        });
+                        questionsCollection.findOneAndUpdate(
+                            { _id: ObjectId(answer.questionId) },
+                            { $inc: { answerCount: 1 } }
+                        ).then(result => {
+                            if(result.lastErrorObject.updatedExisting){
+                                res.send({
+                                    success: true,
+                                    message: "Successfully added your answer, thank you for contributing😊",
+                                });
+                            } else {
+                                res.send({
+                                    success: false,
+                                    message: "Something went wrong! please try again!",
+                                });
+                            } 
+                        })
                     })
                     .catch((err) =>
                         res.send({
@@ -146,6 +170,29 @@ client.connect((err) => {
                 })
             );
     });
+
+    app.post('/updateReaction', verifyJwt, (req, res) => {
+        if(req.body.thumbsUp){
+            questionsCollection.findOneAndUpdate(
+                { _id: ObjectId(req.body.questionId) },
+                { $inc: { thumbsUpCount: 1 } }
+            );
+            reactionsCollection.findOneAndUpdate(
+                { questionId: ObjectId(req.body.questionId) },
+                { $push: {users: req.userId} }
+            );
+            
+        } else {
+            questionsCollection.findOneAndUpdate(
+                { _id: ObjectId(req.body.questionId) },
+                { $inc: { thumbsUpCount: -1 } }
+            );
+            reactionsCollection.findOneAndUpdate(
+                { questionId: ObjectId(req.body.questionId) },
+                { $pull: { users: req.userId } }
+            );
+        }
+    })
 
     app.get("/getUser", verifyJwt, (req, res) => {
         usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
@@ -164,10 +211,15 @@ client.connect((err) => {
             });
     });
 
-    app.get("/questions/:id", (req, res) => {
+    app.get("/questions/:id", verifyJwt, (req, res) => {
         const id = req.params.id;
         questionsCollection.findOne({ _id: ObjectId(id) }).then((question) => {
-            res.send(question);
+            reactionsCollection.findOne({ questionId: ObjectId(id) }).then((reaction) => {
+                const userLiked = reaction.users.find((user) => user === req.userId);
+                question.thumbsUp = userLiked ? true : false;
+                // console.log(reaction);
+                res.send(question);
+            });
         });
     });
     
@@ -188,6 +240,14 @@ client.connect((err) => {
             }
         });
     });
+
+    app.get('/questionsByLanguage/:language', (req, res) => {
+        const language = req.params.language;
+        questionsCollection.find({questionLanguage: language})
+        .toArray( (err, questions) => {
+            res.send(questions);
+        })
+    })
 
 });
 
