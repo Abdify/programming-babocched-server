@@ -249,6 +249,21 @@ client.connect((err) => {
         })
     })
 
+    app.get('/userInfo', verifyJwt, (req, res) => {
+
+        questionsCollection.find({"askedBy._id": ObjectId(req.userId)})
+        .toArray( (err, questions) => {
+            answersCollection.find({"answeredBy._id": ObjectId(req.userId)})
+            .toArray( (err, answers) => {
+                res.send({
+                    questions,
+                    answers,
+                })
+            })
+        });
+
+    })
+
 });
 
 app.get("/", (req, res) => {
