@@ -127,6 +127,52 @@ client.connect((err) => {
         });
     });
 
+    app.post('/editQuestion/:id', verifyJwt, (req, res) => {
+        const id = req.params.id;
+        
+        questionsCollection.findOne({_id: ObjectId(id)})
+        .then(question => {
+            if(question.askedBy._id == req.userId){
+                // console.log(question.questionText, req.userId)
+                questionsCollection
+                    .findOneAndUpdate(
+                        { _id: question._id },
+                        {
+                            $set: {
+                                questionTitle: req.body.questionTitle,
+                                questionText: req.body.questionText,
+                                questionLanguage: req.body.questionLanguage,
+                                updatedAt: req.body.updatedAt,
+                            },
+                        }
+                    )
+                    .then((result) => {
+                        if (result.lastErrorObject.updatedExisting) {
+                            res.send({
+                                success: true,
+                                message:
+                                    "Successfully updated your question, thank you for contributing😊",
+                            });
+                        } else {
+                            res.send({
+                                success: false,
+                                message: "Something went wrong! please try again!",
+                            });
+                        }
+                    })
+                    .catch((err) => console.log(err));
+
+            } else{
+                res.send({success: false, message: "You are not authorized to do this!"})
+            }
+
+        })
+        .catch(err => {
+            console.log(err)
+            res.send({success: false, message: "Question not found! Ask one if you wish..."})
+        })
+    })
+
     app.post("/writeAnswer", verifyJwt, (req, res) => {
         usersCollection
             .findOne({ _id: ObjectId(req.userId) })
