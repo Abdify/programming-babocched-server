@@ -82,7 +82,7 @@ client.connect((err) => {
                                 { id: passwordVerifiedUser._id },
                                 process.env.TOKEN_SECRET,
                                 {
-                                    expiresIn: 600,
+                                    expiresIn: 2000,
                                 }
                             );
                             console.log(user);
@@ -121,7 +121,7 @@ client.connect((err) => {
                 })
                 .then((qId) => {
                     console.log(qId);
-                    reactionsCollection.insertOne({ questionId: qId, users: [] });
+                    reactionsCollection.insertOne({ reactionsOf: qId, users: [] });
                     
                 });
         });
@@ -180,15 +180,22 @@ client.connect((err) => {
                 const answer = req.body;
                 const { _id, userName, email } = user;
                 answer.answeredBy = { _id, userName, email };
+                answer.thumbsUpCount = 0;
                 console.log(answer);
                 answersCollection
                     .insertOne(answer)
-                    .then((result) => {
+                    .then((answerResult) => {
+                        console.log(answerResult.ops[0]._id);
                         questionsCollection.findOneAndUpdate(
                             { _id: ObjectId(answer.questionId) },
                             { $inc: { answerCount: 1 } }
                         ).then(result => {
+                            reactionsCollection.insertOne({
+                                reactionsOf: answerResult.ops[0]._id,
+                                users: [],
+                            });
                             if(result.lastErrorObject.updatedExisting){
+                                
                                 res.send({
                                     success: true,
                                     message: "Successfully added your answer, thank you for contributing😊",
@@ -218,23 +225,24 @@ client.connect((err) => {
     });
 
     app.post('/updateReaction', verifyJwt, (req, res) => {
+        const collection = client.db(process.env.DB_NAME).collection(req.body.type);
         if(req.body.thumbsUp){
-            questionsCollection.findOneAndUpdate(
-                { _id: ObjectId(req.body.questionId) },
+            collection.findOneAndUpdate(
+                { _id: ObjectId(req.body.reactionsOf) },
                 { $inc: { thumbsUpCount: 1 } }
             );
             reactionsCollection.findOneAndUpdate(
-                { questionId: ObjectId(req.body.questionId) },
+                { reactionsOf: ObjectId(req.body.reactionsOf) },
                 { $push: {users: req.userId} }
             );
             
         } else {
-            questionsCollection.findOneAndUpdate(
-                { _id: ObjectId(req.body.questionId) },
+            collection.findOneAndUpdate(
+                { _id: ObjectId(req.body.reactionsOf) },
                 { $inc: { thumbsUpCount: -1 } }
             );
             reactionsCollection.findOneAndUpdate(
-                { questionId: ObjectId(req.body.questionId) },
+                { reactionsOf: ObjectId(req.body.reactionsOf) },
                 { $pull: { users: req.userId } }
             );
         }
@@ -260,7 +268,7 @@ client.connect((err) => {
     app.get("/questions/:id", verifyJwt, (req, res) => {
         const id = req.params.id;
         questionsCollection.findOne({ _id: ObjectId(id) }).then((question) => {
-            reactionsCollection.findOne({ questionId: ObjectId(id) }).then((reaction) => {
+            reactionsCollection.findOne({ reactionsOf: ObjectId(id) }).then((reaction) => {
                 const userLiked = reaction.users.find((user) => user === req.userId);
                 question.thumbsUp = userLiked ? true : false;
                 // console.log(reaction);
@@ -273,18 +281,26 @@ client.connect((err) => {
         const id = req.query.question;
         answersCollection.find({ questionId: id }).toArray((err, answers) => {
             if(!err){
-                res.send({
-                    success: true,
-                    message: `Found ${answers.length} answers!`,
-                    answers,
-                });
+                answers.map(answer => {
+                    reactionsCollection.findOne({ reactionsOf: ObjectId(answer._id) }).then((reaction) => {
+                        const userLiked = reaction?.users.find((user) => user === req.userId);
+                        answer.thumbsUp = userLiked ? true : false;
+                    });
+                })
+                setTimeout(() => {
+                    res.send({
+                        success: true,
+                        message: `Found ${answers.length} answers!`,
+                        answers,
+                    });
+                }, 1000);
             } else {
                 res.send({
                     success: false,
                     message: "No answer found for this question",
                 });
             }
-        });
+        })
     });
 
     app.get('/questionsByLanguage/:language', (req, res) => {
@@ -309,6 +325,42 @@ client.connect((err) => {
         });
 
     })
+
+// DELETE Question
+    app.delete("/question/:id", verifyJwt, (req, res) => {
+        const id = req.params.id;
+
+        questionsCollection
+            .findOne({ _id: ObjectId(id) })
+            .then((question) => {
+                if (question?.askedBy._id == req.userId) {
+                    questionsCollection
+                        .findOneAndDelete({ _id: question._id })
+                        .then((result) => {
+                            console.log(result);
+                            if (result.ok) { //which property to confirm??
+                                res.send({
+                                    success: true,
+                                    message:
+                                        "Successfully deleted your weird question!",
+                                });
+                            } else {
+                                res.send({
+                                    success: false,
+                                    message: "Something went wrong! please try again!",
+                                });
+                            }
+                        })
+                        .catch((err) => console.log(err));
+                } else {
+                    res.send({ success: false, message: "You are not authorized to do this!" });
+                }
+            })
+            .catch((err) => {
+                console.log(err);
+                res.send({ success: false, message: "Question not found! If you want to delete then ask one first!" });
+            });
+    });
 
 });
 
