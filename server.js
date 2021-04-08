@@ -105,7 +105,8 @@ client.connect((err) => {
     });
 
     app.post("/ask", verifyJwt, (req, res) => {
-        usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
+        usersCollection.findOne({ _id: ObjectId(req.userId) })
+        .then((user) => {
             const { _id, userName, email } = user;
             const question = req.body;
             question.askedBy = { _id, userName, email };
@@ -122,56 +123,100 @@ client.connect((err) => {
                 .then((qId) => {
                     console.log(qId);
                     reactionsCollection.insertOne({ reactionsOf: qId, users: [] });
-                    
                 });
         });
     });
 
-    app.post('/editQuestion/:id', verifyJwt, (req, res) => {
+    app.post("/editQuestion/:id", verifyJwt, (req, res) => {
         const id = req.params.id;
-        
-        questionsCollection.findOne({_id: ObjectId(id)})
-        .then(question => {
-            if(question.askedBy._id == req.userId){
-                // console.log(question.questionText, req.userId)
-                questionsCollection
-                    .findOneAndUpdate(
-                        { _id: question._id },
-                        {
-                            $set: {
-                                questionTitle: req.body.questionTitle,
-                                questionText: req.body.questionText,
-                                questionLanguage: req.body.questionLanguage,
-                                updatedAt: req.body.updatedAt,
-                            },
-                        }
-                    )
-                    .then((result) => {
-                        if (result.lastErrorObject.updatedExisting) {
-                            res.send({
-                                success: true,
-                                message:
-                                    "Successfully updated your question, thank you for contributing😊",
-                            });
-                        } else {
-                            res.send({
-                                success: false,
-                                message: "Something went wrong! please try again!",
-                            });
-                        }
-                    })
-                    .catch((err) => console.log(err));
 
-            } else{
-                res.send({success: false, message: "You are not authorized to do this!"})
-            }
+        questionsCollection
+            .findOne({ _id: ObjectId(id) })
+            .then((question) => {
+                if (question.askedBy._id == req.userId) {
+                    // console.log(question.questionText, req.userId)
+                    questionsCollection
+                        .findOneAndUpdate(
+                            { _id: question._id },
+                            {
+                                $set: {
+                                    questionTitle: req.body.questionTitle,
+                                    questionText: req.body.questionText,
+                                    questionLanguage: req.body.questionLanguage,
+                                    updatedAt: req.body.updatedAt,
+                                },
+                            }
+                        )
+                        .then((result) => {
+                            if (result.lastErrorObject.updatedExisting) {
+                                res.send({
+                                    success: true,
+                                    message:
+                                        "Successfully updated your question, thank you for contributing😊",
+                                });
+                            } else {
+                                res.send({
+                                    success: false,
+                                    message: "Something went wrong! please try again!",
+                                });
+                            }
+                        })
+                        .catch((err) => console.log(err));
+                } else {
+                    res.send({ success: false, message: "You are not authorized to do this!" });
+                }
+            })
+            .catch((err) => {
+                console.log(err);
+                res.send({ success: false, message: "Question not found! Ask one if you wish..." });
+            });
+    });
 
-        })
-        .catch(err => {
-            console.log(err)
-            res.send({success: false, message: "Question not found! Ask one if you wish..."})
-        })
-    })
+    app.post("/editAnswer/:id", verifyJwt, (req, res) => {
+        const id = req.params.id;
+
+        answersCollection
+            .findOne({ _id: ObjectId(id) })
+            .then((answer) => {
+                if (answer.answeredBy._id == req.userId) {
+                    answersCollection
+                        .findOneAndUpdate(
+                            { _id: answer._id },
+                            {
+                                $set: {
+                                    answerText: req.body.answerText,
+                                    code: req.body.code,
+                                    updatedAt: req.body.updatedAt,
+                                },
+                            }
+                        )
+                        .then((result) => {
+                            if (result.lastErrorObject.updatedExisting) {
+                                res.send({
+                                    success: true,
+                                    message:
+                                        "Successfully updated your answera, thank you for contributing😊",
+                                });
+                            } else {
+                                res.send({
+                                    success: false,
+                                    message: "Something went wrong! please try again!",
+                                });
+                            }
+                        })
+                        .catch((err) => console.log(err));
+                } else {
+                    res.send({ success: false, message: "You are not authorized to do this!" });
+                }
+            })
+            .catch((err) => {
+                console.log(err);
+                res.send({
+                    success: false,
+                    message: "Answer not found! Write one if you wish...",
+                });
+            });
+    });
 
     app.post("/writeAnswer", verifyJwt, (req, res) => {
         usersCollection
@@ -186,33 +231,34 @@ client.connect((err) => {
                     .insertOne(answer)
                     .then((answerResult) => {
                         console.log(answerResult.ops[0]._id);
-                        questionsCollection.findOneAndUpdate(
-                            { _id: ObjectId(answer.questionId) },
-                            { $inc: { answerCount: 1 } }
-                        ).then(result => {
-                            reactionsCollection.insertOne({
-                                reactionsOf: answerResult.ops[0]._id,
-                                users: [],
+                        questionsCollection
+                            .findOneAndUpdate(
+                                { _id: ObjectId(answer.questionId) },
+                                { $inc: { answerCount: 1 } }
+                            )
+                            .then((result) => {
+                                reactionsCollection.insertOne({
+                                    reactionsOf: answerResult.ops[0]._id,
+                                    users: [],
+                                });
+                                if (result.lastErrorObject.updatedExisting) {
+                                    res.send({
+                                        success: true,
+                                        message:
+                                            "Successfully added your answer, thank you for contributing😊",
+                                    });
+                                } else {
+                                    res.send({
+                                        success: false,
+                                        message: "Something went wrong! please try again!",
+                                    });
+                                }
                             });
-                            if(result.lastErrorObject.updatedExisting){
-                                
-                                res.send({
-                                    success: true,
-                                    message: "Successfully added your answer, thank you for contributing😊",
-                                });
-                            } else {
-                                res.send({
-                                    success: false,
-                                    message: "Something went wrong! please try again!",
-                                });
-                            } 
-                        })
                     })
                     .catch((err) =>
                         res.send({
                             success: false,
-                            message:
-                                "Something went wrong! please try again!",
+                            message: "Something went wrong! please try again!",
                         })
                     );
             })
@@ -224,18 +270,17 @@ client.connect((err) => {
             );
     });
 
-    app.post('/updateReaction', verifyJwt, (req, res) => {
+    app.post("/updateReaction", verifyJwt, (req, res) => {
         const collection = client.db(process.env.DB_NAME).collection(req.body.type);
-        if(req.body.thumbsUp){
+        if (req.body.thumbsUp) {
             collection.findOneAndUpdate(
                 { _id: ObjectId(req.body.reactionsOf) },
                 { $inc: { thumbsUpCount: 1 } }
             );
             reactionsCollection.findOneAndUpdate(
                 { reactionsOf: ObjectId(req.body.reactionsOf) },
-                { $push: {users: req.userId} }
+                { $push: { users: req.userId } }
             );
-            
         } else {
             collection.findOneAndUpdate(
                 { _id: ObjectId(req.body.reactionsOf) },
@@ -246,7 +291,7 @@ client.connect((err) => {
                 { $pull: { users: req.userId } }
             );
         }
-    })
+    });
 
     app.get("/getUser", verifyJwt, (req, res) => {
         usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
@@ -276,17 +321,19 @@ client.connect((err) => {
             });
         });
     });
-    
+
     app.get("/answers", verifyJwt, (req, res) => {
         const id = req.query.question;
         answersCollection.find({ questionId: id }).toArray((err, answers) => {
-            if(!err){
-                answers.map(answer => {
-                    reactionsCollection.findOne({ reactionsOf: ObjectId(answer._id) }).then((reaction) => {
-                        const userLiked = reaction?.users.find((user) => user === req.userId);
-                        answer.thumbsUp = userLiked ? true : false;
-                    });
-                })
+            if (!err) {
+                answers.map((answer) => {
+                    reactionsCollection
+                        .findOne({ reactionsOf: ObjectId(answer._id) })
+                        .then((reaction) => {
+                            const userLiked = reaction?.users.find((user) => user === req.userId);
+                            answer.thumbsUp = userLiked ? true : false;
+                        });
+                });
                 setTimeout(() => {
                     res.send({
                         success: true,
@@ -300,33 +347,32 @@ client.connect((err) => {
                     message: "No answer found for this question",
                 });
             }
-        })
+        });
     });
 
-    app.get('/questionsByLanguage/:language', (req, res) => {
+    app.get("/questionsByLanguage/:language", (req, res) => {
         const language = req.params.language;
-        questionsCollection.find({questionLanguage: language})
-        .toArray( (err, questions) => {
+        questionsCollection.find({ questionLanguage: language }).toArray((err, questions) => {
             res.send(questions);
-        })
-    })
-
-    app.get('/userInfo', verifyJwt, (req, res) => {
-
-        questionsCollection.find({"askedBy._id": ObjectId(req.userId)})
-        .toArray( (err, questions) => {
-            answersCollection.find({"answeredBy._id": ObjectId(req.userId)})
-            .toArray( (err, answers) => {
-                res.send({
-                    questions,
-                    answers,
-                })
-            })
         });
+    });
 
-    })
+    app.get("/userInfo", verifyJwt, (req, res) => {
+        questionsCollection
+            .find({ "askedBy._id": ObjectId(req.userId) })
+            .toArray((err, questions) => {
+                answersCollection
+                    .find({ "answeredBy._id": ObjectId(req.userId) })
+                    .toArray((err, answers) => {
+                        res.send({
+                            questions,
+                            answers,
+                        });
+                    });
+            });
+    });
 
-// DELETE Question
+    // DELETE Question
     app.delete("/question/:id", verifyJwt, (req, res) => {
         const id = req.params.id;
 
@@ -334,15 +380,66 @@ client.connect((err) => {
             .findOne({ _id: ObjectId(id) })
             .then((question) => {
                 if (question?.askedBy._id == req.userId) {
+                    const questionId = String(question._id.valueOf())
                     questionsCollection
                         .findOneAndDelete({ _id: question._id })
                         .then((result) => {
                             console.log(result);
-                            if (result.ok) { //which property to confirm??
+                            if (result.ok) {
+                                answersCollection
+                                    .deleteMany({ questionId: questionId })
+                                    .then((updateResult) => {
+                                        console.log("delete " + updateResult + " delete");
+                                        res.send({
+                                                success: true,
+                                                message: "Successfully deleted your weird Question!",
+                                            });
+                                    })
+                                    .catch((err) => console.log(err));
+                            } else {
                                 res.send({
-                                    success: true,
-                                    message:
-                                        "Successfully deleted your weird question!",
+                                    success: false,
+                                    message: "Something went wrong! please try again!",
+                                });
+                            }
+                        })
+                        .catch((err) => console.log(err));
+                } else {
+                    res.send({ success: false, message: "You are not authorized to do this!" });
+                }
+            })
+            .catch((err) => {
+                console.log(err);
+                res.send({
+                    success: false,
+                    message: "Question not found! If you want to delete then ask one first!",
+                });
+            });
+    });
+
+    // DELETE Answer
+    app.delete("/answer/:id", verifyJwt, (req, res) => {
+        const id = req.params.id;
+
+        answersCollection
+            .findOne({ _id: ObjectId(id) })
+            .then((answer) => {
+                if (answer?.answeredBy._id == req.userId) {
+                    answersCollection
+                        .findOneAndDelete({ _id: answer._id })
+                        .then((result) => {
+                            console.log(result);
+                            if (result.ok) {
+                                //which property to confirm??
+                                questionsCollection.findOneAndUpdate(
+                                    { _id: ObjectId(answer.questionId) },
+                                    { $inc: { answerCount: -1 } }
+                                )
+                                .then(updateResult => {
+                                    res.send({
+                                        success: true,
+                                        message: "Successfully deleted your weird answer!",
+                                    });
                                 });
                             } else {
                                 res.send({
@@ -358,10 +455,12 @@ client.connect((err) => {
             })
             .catch((err) => {
                 console.log(err);
-                res.send({ success: false, message: "Question not found! If you want to delete then ask one first!" });
+                res.send({
+                    success: false,
+                    message: "Answer not found! If you want to delete then write one first!",
+                });
             });
     });
-
 });
 
 app.get("/", (req, res) => {
