@@ -305,10 +305,24 @@ client.connect((err) => {
         questionsCollection
             .find({})
             .limit(20)
+            .sort({askedAt: -1})
             .toArray((err, questions) => {
                 res.send(questions);
             });
     });
+
+    app.get('/questions/top', (req, res) => {
+        let topQuestions = [];
+        questionsCollection.find({})
+        .toArray((err, questions) => {
+            const q = [...questions];
+            const sortedByThumbsUp = q.sort((a,b) => b.thumbsUpCount - a.thumbsUpCount);
+            const sortedByAnswer = questions.sort((a,b) => b.answerCount - a.answerCount);
+            topQuestions = [sortedByThumbsUp[0], sortedByAnswer[0]];
+            console.log(topQuestions);
+            res.send(topQuestions);
+        });
+    })
 
     app.get("/questions/:id", verifyJwt, (req, res) => {
         const id = req.params.id;
@@ -371,6 +385,14 @@ client.connect((err) => {
                     });
             });
     });
+
+    app.get('/search', (req, res) => {
+        const query = req.query.query;
+        const re = new RegExp(`.*${query}.*`, "i");
+        questionsCollection.find({ questionTitle: { $regex: re } }).limit(10).toArray((err, questions) => {
+            res.send(questions);
+        });
+    })
 
     // DELETE Question
     app.delete("/question/:id", verifyJwt, (req, res) => {
@@ -468,5 +490,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Making bebocched at http://localhost:${port}`);
+    console.log(`Making babocched at http://localhost:${port}`);
 });
