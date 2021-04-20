@@ -302,10 +302,13 @@ client.connect((err) => {
     });
 
     app.get("/questions", (req, res) => {
+        const {sortBy, language} = req.query;
+        const filter = language ? language !== "All" ? { questionLanguage: language } : {} : {};
+        const sort = sortBy ? sortBy==="latest" ? {askedAt: -1} : {thumbsUpCount: 1} : {askedAt: -1};
         questionsCollection
-            .find({})
+            .find(filter)
             .limit(20)
-            .sort({askedAt: -1})
+            .sort(sort)
             .toArray((err, questions) => {
                 res.send(questions);
             });
@@ -319,7 +322,6 @@ client.connect((err) => {
             const sortedByThumbsUp = q.sort((a,b) => b.thumbsUpCount - a.thumbsUpCount);
             const sortedByAnswer = questions.sort((a,b) => b.answerCount - a.answerCount);
             topQuestions = [sortedByThumbsUp[0], sortedByAnswer[0]];
-            console.log(topQuestions);
             res.send(topQuestions);
         });
     })
@@ -490,5 +492,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Making babocched at http://localhost:${port}`);
+    console.log(`Making babocched at port:${port}`);
 });
