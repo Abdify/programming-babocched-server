@@ -304,8 +304,8 @@ client.connect((err) => {
     });
 
     app.get("/questions", (req, res) => {
-        const {sortBy, language} = req.query;
-        const filter = language ? language !== "All" ? { questionLanguage: language } : {} : {};
+        const {sortBy, tag} = req.query;
+        const filter = tag ? tag !== "All" ? { tags: tag } : {} : {};
         const sort = sortBy ? sortBy==="latest" ? {askedAt: -1} : {thumbsUpCount: 1} : {askedAt: -1};
         questionsCollection
             .find(filter)
@@ -329,6 +329,10 @@ client.connect((err) => {
     })
 
     app.get("/questions/:id", verifyJwt, (req, res) => {
+    // Update visitor info
+    // Increment view count
+    // Send current user isLiked state
+    // Send question
         const id = req.params.id;
         
         const visitorDetail = {
@@ -379,16 +383,22 @@ client.connect((err) => {
         // });
     });
 
+    // Need update!!
     app.get("/answers", verifyJwt, (req, res) => {
         const id = req.query.question;
         answersCollection.find({ questionId: id }).toArray((err, answers) => {
-            if (!err) {
+            if (answers.length) {
                 answers.map((answer) => {
                     reactionsCollection
                         .findOne({ reactionsOf: ObjectId(answer._id) })
                         .then((reaction) => {
                             const userLiked = reaction?.users.find((user) => user === req.userId);
                             answer.thumbsUp = userLiked ? true : false;
+                            // res.send({
+                            //     success: true,
+                            //     message: `Found ${answers.length} answers!`,
+                            //     answers,
+                            // });
                         });
                 });
                 setTimeout(() => {
@@ -407,9 +417,9 @@ client.connect((err) => {
         });
     });
 
-    app.get("/questionsByLanguage/:language", (req, res) => {
-        const language = req.params.language;
-        questionsCollection.find({ questionLanguage: language }).toArray((err, questions) => {
+    app.get("/questionsByTag/:tag", (req, res) => {
+        const tag = req.params.tag;
+        questionsCollection.find({ tags: tag }).toArray((err, questions) => {
             res.send(questions);
         });
     });
