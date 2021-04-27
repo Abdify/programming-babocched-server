@@ -5,6 +5,8 @@ const jwt = require("jsonwebtoken");
 const MongoClient = require("mongodb").MongoClient;
 const { ObjectId } = require("bson");
 require("dotenv").config();
+const verifyRefreshToken = require('./helpers/verifyRefreshToken.js');
+const generateToken = require("./helpers/generateToken.js");
 
 const port = process.env.PORT || 5000;
 
@@ -24,7 +26,12 @@ const verifyJwt = (req, res, next) => {
                 req.userId = decoded.id;
                 next();
             } else {
-                res.send({ message: "token doesn't match!" });
+                if(err.expiredAt){
+                    console.log(err.expiredAt);
+                    res.send({tokenExpired: true, message: "token expired!" });
+                } else {
+                    res.send({message: "token doesn't match!" });
+                }
             }
         });
     } else {
@@ -79,17 +86,16 @@ client.connect((err) => {
                             // Successfully logged in
                             const { _id, userName, email } = passwordVerifiedUser;
                             // Generate token
-                            const token = jwt.sign(
-                                { id: passwordVerifiedUser._id },
-                                process.env.TOKEN_SECRET,
-                                {
-                                    expiresIn: 2000,
-                                }
-                            );
-                            console.log(user);
+                            const token = generateToken(passwordVerifiedUser._id);
+                            const refreshToken = jwt.sign( {
+                                id: passwordVerifiedUser._id},
+                                process.env.REFRESH_TOKEN_SECRET,
+                                {expiresIn: '1y'}
+                                )
                             res.send({
                                 success: true,
-                                token: token,
+                                token,
+                                refreshToken,
                                 user: { _id, userName, email },
                             });
                         } else {
@@ -303,6 +309,15 @@ client.connect((err) => {
             res.send({ auth: true, user: { _id, userName, email } });
         });
     });
+
+    app.get("/refreshToken", verifyRefreshToken, (req, res) => {
+        const token = generateToken(req.userId);
+        usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
+            // console.log(user);
+            const { _id, userName, email } = user;
+            res.send({ auth: true, token, user: { _id, userName, email } });
+        });
+    })
 
     app.get("/questions", (req, res) => {
         const {sortBy, tag} = req.query;
