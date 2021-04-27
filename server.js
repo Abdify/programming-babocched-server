@@ -144,7 +144,8 @@ client.connect((err) => {
                                 $set: {
                                     questionTitle: req.body.questionTitle,
                                     questionText: req.body.questionText,
-                                    questionLanguage: req.body.questionLanguage,
+                                    // questionLanguage: req.body.questionLanguage,
+                                    tags: req.body.tags,
                                     updatedAt: req.body.updatedAt,
                                 },
                             }
@@ -423,6 +424,21 @@ client.connect((err) => {
             res.send(questions);
         });
     });
+
+    // Failed to get only the tags!!
+    app.get('/tags', (req, res) => {
+        questionsCollection.find({}, {tags: 1})
+        .limit(100)
+        .toArray((err, questions) => {
+            const tags = [];
+            questions.map(question => {
+                question.tags?.map(tag => {
+                    !tags.includes(tag) && tags.push(tag);
+                })
+            })
+            res.send(tags);
+        })
+    })
 
     app.get("/userInfo", verifyJwt, (req, res) => {
         questionsCollection
