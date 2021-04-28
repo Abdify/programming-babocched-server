@@ -48,6 +48,7 @@ client.connect((err) => {
     const answersCollection = client.db(process.env.DB_NAME).collection("answers");
     const reactionsCollection = client.db(process.env.DB_NAME).collection("reactions");
     const visitorsCollection = client.db(process.env.DB_NAME).collection("visitors");
+    const reviewsCollection = client.db(process.env.DB_NAME).collection("reviews");
 
     app.post("/addUser", (req, res) => {
         const newUser = req.body;
@@ -301,6 +302,21 @@ client.connect((err) => {
             );
         }
     });
+
+    app.post('/addReview', verifyJwt, (req, res) => {
+        const reviewInfo = req.body;
+        reviewsCollection.insertOne(reviewInfo)
+        .then(result => {
+            res.send(result.insertedCount > 0);
+        })
+    })
+
+    app.get('/reviews', (req, res) => {
+        reviewsCollection.find({})
+        .toArray((err, reviews) => {
+            res.send(reviews);
+        })
+    })
 
     app.get("/getUser", verifyJwt, (req, res) => {
         usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
