@@ -18,25 +18,26 @@ app.use(express.json());
 
 const verifyJwt = (req, res, next) => {
     const token = req.headers["x-access-token"];
-
-    if (token) {
-        jwt.verify(token, process.env.TOKEN_SECRET, (err, decoded) => {
-            if (!err) {
-                //success
-                req.userId = decoded.id;
-                next();
-            } else {
-                if(err.expiredAt){
-                    console.log(err.expiredAt);
-                    res.send({tokenExpired: true, message: "token expired!" });
-                } else {
-                    res.send({message: "token doesn't match!" });
-                }
-            }
-        });
-    } else {
-        res.send({ message: "No token found!" });
+    if(token === "null") {
+        res.send({ auth: false, message: "No token found!" });
+        return;
     }
+
+    jwt.verify(token, process.env.TOKEN_SECRET, (err, decoded) => {
+        if (!err) {
+            //success
+            req.userId = decoded.id;
+            next();
+        } else {
+            if(err.expiredAt){
+                console.log("tokenExpired");
+                res.send({ auth: false, message: "token expired!", tokenExpired: true });
+            } else {
+                res.send({auth: false, message: "token doesn't match!" });
+            }
+        }
+    });
+    
 };
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d7fiy.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
@@ -125,13 +126,16 @@ client.connect((err) => {
             questionsCollection
                 .insertOne(question)
                 .then((result) => {
-                    res.send(result.insertedCount > 0);
-                    console.log(result.ops[0]._id);
-                    return result.ops[0]._id;
+                    if (result.insertedCount > 0){
+                        res.send({ success: true });
+                        console.log(result.ops[0]._id);
+                        return result.ops[0]._id;
+                    }
+                    
                 })
                 .then((qId) => {
                     console.log(qId);
-                    reactionsCollection.insertOne({ reactionsOf: qId, users: [] });
+                    qId && reactionsCollection.insertOne({ reactionsOf: qId, users: [] });
                 });
         });
     });
@@ -511,7 +515,7 @@ client.connect((err) => {
                                 answersCollection
                                     .deleteMany({ questionId: questionId })
                                     .then((updateResult) => {
-                                        console.log("delete " + updateResult + " delete");
+                                        // console.log("delete " + updateResult + " delete");
                                         res.send({
                                                 success: true,
                                                 message: "Successfully deleted your weird Question!",
