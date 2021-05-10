@@ -40,6 +40,12 @@ const verifyJwt = (req, res, next) => {
     
 };
 
+const findUserStatus = (req, res, next) => {
+    usersCollection.findOne({ _id: ObjectId(req.userId) })
+    .then(result => req.userStatus = result.userStatus);
+    next();
+} 
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d7fiy.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 client.connect((err) => {
@@ -587,6 +593,21 @@ client.connect((err) => {
                 });
             });
     });
+
+    // Make Admin
+    app.put("/makeAdmin", verifyJwt, findUserStatus, (req, res) => {
+        const {newAdminEmail} = req.body;
+        if(req.userStatus !== "admin") res.send({success: false, message: "You are not authorized to do that..."});
+        usersCollection.findOneAndUpdate({email: newAdminEmail}, {$set: {userStatus: "admin"}})
+        .then(result => {
+            if(result.lastErrorObject.updatedExisting){
+                res.send({success: true, message: "Success!"});
+            }
+            res.send({success: false, message: "User not found..."});
+            
+
+        })
+    })
 });
 
 app.get("/", (req, res) => {
