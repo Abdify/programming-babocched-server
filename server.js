@@ -40,11 +40,7 @@ const verifyJwt = (req, res, next) => {
     
 };
 
-const findUserStatus = (req, res, next) => {
-    usersCollection.findOne({ _id: ObjectId(req.userId) })
-    .then(result => req.userStatus = result.userStatus);
-    next();
-} 
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d7fiy.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -56,6 +52,14 @@ client.connect((err) => {
     const reactionsCollection = client.db(process.env.DB_NAME).collection("reactions");
     const visitorsCollection = client.db(process.env.DB_NAME).collection("visitors");
     const reviewsCollection = client.db(process.env.DB_NAME).collection("reviews");
+
+
+    const findUserStatus = (req, res, next) => {
+        usersCollection
+            .findOne({ _id: ObjectId(req.userId) })
+            .then((result) => (req.userStatus = result.userStatus));
+        next();
+    }; 
 
     app.post("/addUser", (req, res) => {
         const newUser = req.body;
