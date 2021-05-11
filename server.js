@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const MongoClient = require("mongodb").MongoClient;
 const { ObjectId } = require("bson");
 require("dotenv").config();
-const verifyRefreshToken = require('./helpers/verifyRefreshToken.js');
+const verifyRefreshToken = require("./helpers/verifyRefreshToken.js");
 const generateToken = require("./helpers/generateToken.js");
 
 const port = process.env.PORT || 5000;
@@ -18,7 +18,7 @@ app.use(express.json());
 
 const verifyJwt = (req, res, next) => {
     const token = req.headers["x-access-token"];
-    if(token === "null") {
+    if (token === "null") {
         res.send({ auth: false, message: "No token found!" });
         return;
     }
@@ -29,18 +29,15 @@ const verifyJwt = (req, res, next) => {
             req.userId = decoded.id;
             next();
         } else {
-            if(err.expiredAt){
+            if (err.expiredAt) {
                 console.log("tokenExpired");
                 res.send({ auth: false, message: "token expired!", tokenExpired: true });
             } else {
-                res.send({auth: false, message: "token doesn't match!" });
+                res.send({ auth: false, message: "token doesn't match!" });
             }
         }
     });
-    
 };
-
-
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d7fiy.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -53,13 +50,12 @@ client.connect((err) => {
     const visitorsCollection = client.db(process.env.DB_NAME).collection("visitors");
     const reviewsCollection = client.db(process.env.DB_NAME).collection("reviews");
 
-
-    const findUserStatus = (req, res, next) => {
-        usersCollection
-            .findOne({ _id: ObjectId(req.userId) })
-            .then((result) => (req.userStatus = result.userStatus));
-        next();
-    }; 
+    const checkUserStatus = (req, res, next) => {
+        usersCollection.findOne({ _id: ObjectId(req.userId) }).then((result) => {
+            req.userStatus = result.userStatus;
+            next();
+        });
+    };
 
     app.post("/addUser", (req, res) => {
         const newUser = req.body;
@@ -99,11 +95,13 @@ client.connect((err) => {
                             const { _id, userName, email } = passwordVerifiedUser;
                             // Generate token
                             const token = generateToken(passwordVerifiedUser._id);
-                            const refreshToken = jwt.sign( {
-                                id: passwordVerifiedUser._id},
+                            const refreshToken = jwt.sign(
+                                {
+                                    id: passwordVerifiedUser._id,
+                                },
                                 process.env.REFRESH_TOKEN_SECRET,
-                                {expiresIn: '1y'}
-                                )
+                                { expiresIn: "1y" }
+                            );
                             res.send({
                                 success: true,
                                 token,
@@ -124,8 +122,7 @@ client.connect((err) => {
     });
 
     app.post("/ask", verifyJwt, (req, res) => {
-        usersCollection.findOne({ _id: ObjectId(req.userId) })
-        .then((user) => {
+        usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
             const { _id, userName, email } = user;
             const question = req.body;
             question.askedBy = { _id, userName, email };
@@ -136,12 +133,11 @@ client.connect((err) => {
             questionsCollection
                 .insertOne(question)
                 .then((result) => {
-                    if (result.insertedCount > 0){
+                    if (result.insertedCount > 0) {
                         res.send({ success: true });
                         console.log(result.ops[0]._id);
                         return result.ops[0]._id;
                     }
-                    
                 })
                 .then((qId) => {
                     console.log(qId);
@@ -317,26 +313,30 @@ client.connect((err) => {
         }
     });
 
-    app.post('/addReview', verifyJwt, (req, res) => {
+    app.post("/addReview", verifyJwt, (req, res) => {
         const reviewInfo = req.body;
-        reviewsCollection.insertOne(reviewInfo)
-        .then(result => {
+        reviewsCollection.insertOne(reviewInfo).then((result) => {
             res.send(result.insertedCount > 0);
-        })
-    })
+        });
+    });
 
-    app.get('/reviews', (req, res) => {
-        reviewsCollection.find({})
-        .toArray((err, reviews) => {
+    app.get("/reviews", (req, res) => {
+        reviewsCollection.find({}).toArray((err, reviews) => {
             res.send(reviews);
-        })
-    })
+        });
+    });
 
     app.get("/getUser", verifyJwt, (req, res) => {
         usersCollection.findOne({ _id: ObjectId(req.userId) }).then((user) => {
             // console.log(user);
-            const { _id, userName, email } = user;
-            res.send({ auth: true, user: { _id, userName, email } });
+            // const { _id, userName, email } = user;
+            // res.send({ auth: true, user: { _id, userName, email, } });
+
+            const notAllowed = ["password"];
+            Object.keys(user)
+                .filter((key) => notAllowed.includes(key))
+                .forEach((key) => delete user[key]);
+            res.send({ auth: true, user });
         });
     });
 
@@ -347,12 +347,16 @@ client.connect((err) => {
             const { _id, userName, email } = user;
             res.send({ auth: true, token, user: { _id, userName, email } });
         });
-    })
+    });
 
     app.get("/questions", (req, res) => {
-        const {sortBy, tag} = req.query;
-        const filter = tag ? tag !== "All" ? { tags: tag } : {} : {};
-        const sort = sortBy ? sortBy==="latest" ? {askedAt: -1} : {thumbsUpCount: 1} : {askedAt: -1};
+        const { sortBy, tag } = req.query;
+        const filter = tag ? (tag !== "All" ? { tags: tag } : {}) : {};
+        const sort = sortBy
+            ? sortBy === "latest"
+                ? { askedAt: -1 }
+                : { thumbsUpCount: 1 }
+            : { askedAt: -1 };
         questionsCollection
             .find(filter)
             .limit(20)
@@ -362,63 +366,87 @@ client.connect((err) => {
             });
     });
 
-    app.get('/questions/top', (req, res) => {
+    app.get("/questions/top", (req, res) => {
         let topQuestions = [];
-        questionsCollection.find({})
-        .toArray((err, questions) => {
+        questionsCollection.find({}).toArray((err, questions) => {
             const q = [...questions];
-            const sortedByThumbsUp = q.sort((a,b) => b.thumbsUpCount - a.thumbsUpCount);
-            const sortedByAnswer = questions.sort((a,b) => b.answerCount - a.answerCount);
+            const sortedByThumbsUp = q.sort((a, b) => b.thumbsUpCount - a.thumbsUpCount);
+            const sortedByAnswer = questions.sort((a, b) => b.answerCount - a.answerCount);
             topQuestions = [sortedByThumbsUp[0], sortedByAnswer[0]];
             res.send(topQuestions);
         });
-    })
+    });
 
     app.get("/questions/:id", verifyJwt, (req, res) => {
-    // Update visitor info
-    // Increment view count
-    // Send current user isLiked state
-    // Send question
+        // Update visitor info
+        // Increment view count
+        // Send current user isLiked state
+        // Send question
         const id = req.params.id;
-        
+
         const visitorDetail = {
+            userId: req.userId,
             time: [new Date().getTime()],
-            visitedUrl: [req.url],
             userAgent: [req.headers["user-agent"]],
-            ip: req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress,
-        }
+            ip: [req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress],
+            visitedUrl: [req.url],
+        };
 
-        visitorsCollection
-            .findOneAndUpdate(
-                { ip: visitorDetail.ip },
-                {
-                    $push: {
-                        time: visitorDetail.time[0],
-                        userAgent: visitorDetail.userAgent[0],
-                        visitedUrl: visitorDetail.visitedUrl[0],
-                    },
-                }
-            )
+        visitorsCollection.findOne({ userId: visitorDetail.userId }).then((visitor) => {
+            if (!visitor) {
+                visitorsCollection.insertOne(visitorDetail);
+                return;
+            }
+            const visitorAlreadyVisitedQuestion = visitor.visitedUrl.includes(
+                visitorDetail.visitedUrl[0]
+            );
+            visitorAlreadyVisitedQuestion
+                ? {}
+                : visitorsCollection.updateOne(
+                      { userId: visitorDetail.userId },
+                      {
+                          $push: {
+                              time: visitorDetail.time[0],
+                              ip: visitorDetail.ip[0],
+                              userAgent: visitorDetail.userAgent[0],
+                              visitedUrl: visitorDetail.visitedUrl[0],
+                          },
+                      }
+                  );
+        });
+
+        questionsCollection
+            .findOneAndUpdate({ _id: ObjectId(id) }, { $inc: { viewCount: 1 } })
             .then((result) => {
-                if (!result.lastErrorObject.updatedExisting) {
-                    visitorsCollection.insertOne(visitorDetail);
-                }
+                const foundQuestion = result.value;
+                reactionsCollection.findOne({ reactionsOf: ObjectId(id) }).then((reaction) => {
+                    const userLiked = reaction.users.find((user) => user === req.userId);
+                    
+                    foundQuestion.thumbsUp = userLiked ? true : false;
+                    res.send(foundQuestion);
+                });
+            })
+            .catch((error) => {
+                console.log(error);
             });
 
-        questionsCollection.findOneAndUpdate(
-            { _id: ObjectId(id) },
-            { $inc: { viewCount: 1 } }
-        ).then(result => {
-            const foundQuestion = result.value;
-            reactionsCollection.findOne({ reactionsOf: ObjectId(id) }).then((reaction) => {
-                const userLiked = reaction.users.find((user) => user === req.userId);
-                foundQuestion.thumbsUp = userLiked ? true : false;
-                res.send(foundQuestion);
-            });
-        })
-        .catch(error => {
-            console.log(error);
-        })
+        // visitorsCollection
+        //     .findOneAndUpdate(
+        //         { userId: visitorDetail.userId },
+        //         {
+        //             $push: {
+        //                 time: visitorDetail.time[0],
+        //                 ip: visitorDetail.ip[0],
+        //                 userAgent: visitorDetail.userAgent[0],
+        //                 visitedUrl: visitorDetail.visitedUrl[0],
+        //             },
+        //         }
+        //     )
+        //     .then((result) => {
+        //         if (!result.lastErrorObject.updatedExisting) {
+        //             visitorsCollection.insertOne(visitorDetail);
+        //         }
+        //     });
 
         // questionsCollection.findOne({ _id: ObjectId(id) }).then((question) => {
         //     reactionsCollection.findOne({ reactionsOf: ObjectId(id) }).then((reaction) => {
@@ -471,23 +499,26 @@ client.connect((err) => {
     });
 
     // Failed to get only the tags!!
-    app.get('/tags', (req, res) => {
-        questionsCollection.find({}, {tags: 1})
-        .limit(100)
-        .toArray((err, questions) => {
-            const tags = [];
-            questions.map(question => {
-                question.tags?.map(tag => {
-                    !tags.includes(tag) && tags.push(tag);
-                })
-            })
-            res.send(tags);
-        })
-    })
-
-    app.get("/userInfo", verifyJwt, (req, res) => {
+    app.get("/tags", (req, res) => {
         questionsCollection
-            .find({ "askedBy._id": ObjectId(req.userId) })
+            .find({}, { tags: 1 })
+            .limit(100)
+            .toArray((err, questions) => {
+                const tags = [];
+                questions.map((question) => {
+                    question.tags?.map((tag) => {
+                        !tags.includes(tag) && tags.push(tag);
+                    });
+                });
+                res.send(tags);
+            });
+    });
+
+    app.get("/userInfo", verifyJwt, checkUserStatus, (req, res) => {
+        const filter = req.userStatus === "admin" ? "" : { "askedBy._id": ObjectId(req.userId) };
+        questionsCollection
+            .find(filter)
+            .limit(10)
             .toArray((err, questions) => {
                 answersCollection
                     .find({ "answeredBy._id": ObjectId(req.userId) })
@@ -500,13 +531,16 @@ client.connect((err) => {
             });
     });
 
-    app.get('/search', (req, res) => {
+    app.get("/search", (req, res) => {
         const query = req.query.query;
         const re = new RegExp(`.*${query}.*`, "i");
-        questionsCollection.find({ questionTitle: { $regex: re } }).limit(10).toArray((err, questions) => {
-            res.send(questions);
-        });
-    })
+        questionsCollection
+            .find({ questionTitle: { $regex: re } })
+            .limit(10)
+            .toArray((err, questions) => {
+                res.send(questions);
+            });
+    });
 
     // DELETE Question
     app.delete("/question/:id", verifyJwt, (req, res) => {
@@ -516,7 +550,7 @@ client.connect((err) => {
             .findOne({ _id: ObjectId(id) })
             .then((question) => {
                 if (question?.askedBy._id == req.userId) {
-                    const questionId = String(question._id.valueOf())
+                    const questionId = String(question._id.valueOf());
                     questionsCollection
                         .findOneAndDelete({ _id: question._id })
                         .then((result) => {
@@ -527,9 +561,9 @@ client.connect((err) => {
                                     .then((updateResult) => {
                                         // console.log("delete " + updateResult + " delete");
                                         res.send({
-                                                success: true,
-                                                message: "Successfully deleted your weird Question!",
-                                            });
+                                            success: true,
+                                            message: "Successfully deleted your weird Question!",
+                                        });
                                     })
                                     .catch((err) => console.log(err));
                             } else {
@@ -567,16 +601,17 @@ client.connect((err) => {
                             console.log(result);
                             if (result.ok) {
                                 //which property to confirm??
-                                questionsCollection.findOneAndUpdate(
-                                    { _id: ObjectId(answer.questionId) },
-                                    { $inc: { answerCount: -1 } }
-                                )
-                                .then(updateResult => {
-                                    res.send({
-                                        success: true,
-                                        message: "Successfully deleted your weird answer!",
+                                questionsCollection
+                                    .findOneAndUpdate(
+                                        { _id: ObjectId(answer.questionId) },
+                                        { $inc: { answerCount: -1 } }
+                                    )
+                                    .then((updateResult) => {
+                                        res.send({
+                                            success: true,
+                                            message: "Successfully deleted your weird answer!",
+                                        });
                                     });
-                                });
                             } else {
                                 res.send({
                                     success: false,
@@ -599,19 +634,22 @@ client.connect((err) => {
     });
 
     // Make Admin
-    app.put("/makeAdmin", verifyJwt, findUserStatus, (req, res) => {
-        const {newAdminEmail} = req.body;
-        if(req.userStatus !== "admin") res.send({success: false, message: "You are not authorized to do that..."});
-        usersCollection.findOneAndUpdate({email: newAdminEmail}, {$set: {userStatus: "admin"}})
-        .then(result => {
-            if(result.lastErrorObject.updatedExisting){
-                res.send({success: true, message: "Success!"});
-            }
-            res.send({success: false, message: "User not found..."});
-            
-
-        })
-    })
+    app.put("/makeAdmin", verifyJwt, checkUserStatus, (req, res) => {
+        const { newAdminEmail } = req.body;
+        if (req.userStatus !== "admin") {
+            res.send({ success: false, message: "You are not authorized to do that..." });
+            return;
+        }
+        usersCollection
+            .findOneAndUpdate({ email: newAdminEmail }, { $set: { userStatus: "admin" } })
+            .then((result) => {
+                if (result.lastErrorObject.updatedExisting) {
+                    res.send({ success: true, message: "Success!" });
+                    return;
+                }
+                res.send({ success: false, message: "User not found..." });
+            });
+    });
 });
 
 app.get("/", (req, res) => {
